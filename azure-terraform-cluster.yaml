@@ -1,4 +1,13 @@
 provider "azurerm" {
+- task: TerraformTaskV2@2
+  inputs:
+    provider: 'azurerm'
+    command: 'init'
+    backendServiceArm: 'Free Trial (b14eba4a-ee87-47b9-9bf4-2aaa9abb278e)'
+    backendAzureRmResourceGroupName: 'test-demo'
+    backendAzureRmStorageAccountName: 'ybdsaiegakjsdmo'
+    backendAzureRmContainerName: 'testdemotest'
+    backendAzureRmKey: 'test'
   #subscription_id = var.subscription_id 
 features {}
 }
