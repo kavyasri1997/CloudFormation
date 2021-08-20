@@ -1,5 +1,5 @@
 provider "azurerm" {
-- task: TerraformTaskV2@2
+  - task: TerraformTaskV2@2
   inputs:
     provider: 'azurerm'
     command: 'init'
