@@ -1,0 +1,48 @@
+provider "azurerm" {
+  #subscription_id = var.subscription_id 
+features {}
+}
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "=2.46.0"
+    }
+  }
+}
+resource "azurerm_kubernetes_cluster" "cluster" {
+  name                     = "test-Akscluster"
+  kubernetes_version       = "1.19.11"                    
+  location                 = "East US"  
+  resource_group_name      = "Em_Console_Test"
+  private_cluster_enabled  = "true"
+  dns_prefix               = "tf"
+
+
+  default_node_pool {
+    name       = "default"
+    node_count = 2
+    vm_size    = "Standard_D2_v2"
+    
+  }
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  network_profile {
+    network_plugin     = "kubenet"
+    dns_service_ip     = "10.0.0.10"         
+    docker_bridge_cidr = "172.17.0.1/16"
+    pod_cidr           = "10.244.0.0/16"           
+    service_cidr       = "10.0.0.0/16"
+    
+    
+  }
+
+
+  tags = {
+      Name = test-environments
+      Environment = Dev
+   }
+}
