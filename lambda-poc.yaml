@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: POC Lambda for AWS DevOps Agent investigation — healthy baseline (v2, with real dependency)
+
+Resources:
+  PocTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: poc-devops-agent-table
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: Id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Id
+          KeyType: HASH
+
+  PocFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: PocTableAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PocTable.Arn
+
+  PocFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: poc-devops-agent-fn
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt PocFunctionRole.Arn
+      Timeout: 10
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref PocTable
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+
+          def handler(event, context):
+              # Healthy version — reads a fixed item from the configured table.
+              # This is the "known good" state the agent should recognize.
+              table_name = os.environ["TABLE_NAME"]
+              ddb = boto3.resource("dynamodb")
+              table = ddb.Table(table_name)
+              response = table.get_item(Key={"Id": "poc-item"})
+              return {"status": "ok", "item_found": "Item" in response}
+
+Outputs:
+  FunctionName:
+    Value: !Ref PocFunction
+  TableName:
+    Value: !Ref PocTable

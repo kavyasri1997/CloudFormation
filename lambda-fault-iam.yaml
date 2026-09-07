@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  FAULT VARIANT 1 — IAM issue.
+  The PocTableAccess inline policy has been REMOVED from the role below.
+  The function code and table are unchanged from the healthy baseline;
+  only the IAM permission is missing. Expected symptom: Lambda throws
+  AccessDeniedException / dynamodb:GetItem is not authorized.
+
+Resources:
+  PocTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: poc-devops-agent-table
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: Id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Id
+          KeyType: HASH
+
+  PocFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      # <-- PocTableAccess inline policy intentionally removed here.
+      #     This is the entire fault: the role can no longer read the table.
+
+  PocFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: poc-devops-agent-fn
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt PocFunctionRole.Arn
+      Timeout: 10
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref PocTable
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+
+          def handler(event, context):
+              table_name = os.environ["TABLE_NAME"]
+              ddb = boto3.resource("dynamodb")
+              table = ddb.Table(table_name)
+              response = table.get_item(Key={"Id": "poc-item"})
+              return {"status": "ok", "item_found": "Item" in response}
+
+Outputs:
+  FunctionName:
+    Value: !Ref PocFunction
+  TableName:
+    Value: !Ref PocTable

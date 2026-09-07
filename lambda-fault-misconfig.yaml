@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  FAULT VARIANT 2 — Misconfigured resource.
+  TABLE_NAME env var below has been changed to a name that does NOT match
+  any real table (typo / stale reference, simulating a drifted config).
+  IAM permissions and code are otherwise unchanged from the healthy
+  baseline. Expected symptom: ResourceNotFoundException from DynamoDB —
+  looks superficially similar to the IAM fault (both fail on get_item),
+  which is exactly why this is a good test of whether the agent can
+  actually tell the two apart rather than just pattern-matching on
+  "DynamoDB error = permissions".
+
+Resources:
+  PocTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: poc-devops-agent-table
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: Id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Id
+          KeyType: HASH
+
+  PocFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: PocTableAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PocTable.Arn
+
+  PocFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: poc-devops-agent-fn
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt PocFunctionRole.Arn
+      Timeout: 10
+      Environment:
+        Variables:
+          # <-- THE FAULT: this does not match PocTable's real name
+          # (poc-devops-agent-table). Simulates a rename/drift that
+          # wasn't propagated everywhere.
+          TABLE_NAME: poc-devops-agent-table-old
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+
+          def handler(event, context):
+              table_name = os.environ["TABLE_NAME"]
+              ddb = boto3.resource("dynamodb")
+              table = ddb.Table(table_name)
+              response = table.get_item(Key={"Id": "poc-item"})
+              return {"status": "ok", "item_found": "Item" in response}
+
+Outputs:
+  FunctionName:
+    Value: !Ref PocFunction
+  TableName:
+    Value: !Ref PocTable
